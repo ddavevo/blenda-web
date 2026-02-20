@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import type { CaptureResult } from "@/types/blenda";
 
 interface UrlInputProps {
-  onCapture?: (result: {
-    image: string;
-    metadata: { width: number; height: number };
-  }) => void;
+  onCapture?: (result: CaptureResult) => void;
 }
 
 export function UrlInput({ onCapture }: UrlInputProps) {
