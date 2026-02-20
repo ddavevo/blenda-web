@@ -11,7 +11,7 @@ export default function Home() {
   return (
     <main style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto" }}>
       <h1>Blend-a-Web</h1>
-      <UrlInput />
+      <UrlInput onCapture={(result) => console.log(result)} />
       <BlendContainer />
       <ColorOutput />
       <SavedBlendas />
