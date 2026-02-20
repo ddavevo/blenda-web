@@ -16,26 +16,30 @@ export function UrlInput({ onCapture }: UrlInputProps) {
 
   async function handleBlend() {
     if (!url) return;
-
+  
+    const normalizedUrl =
+      url.startsWith("http://") || url.startsWith("https://")
+        ? url
+        : `https://${url}`;
+  
     setLoading(true);
     setError(null);
-
+  
     try {
       const res = await fetch("/api/capture", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: normalizedUrl }),
       });
-
+  
       const data = await res.json();
-
+  
       if (!res.ok) {
         throw new Error(data.error || "Capture failed");
       }
-
-      // pass result up to parent (so it can render canvas later)
+  
       onCapture?.(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -50,7 +54,7 @@ export function UrlInput({ onCapture }: UrlInputProps) {
 
       <input
         id="url"
-        type="url"
+        type="text"
         placeholder="https://example.com"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
