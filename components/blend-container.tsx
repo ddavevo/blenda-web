@@ -3,7 +3,7 @@
 // Wrapper for capture display (and future PhysicsCanvas + RotationKnob).
 // Accepts capture result and renders screenshot on canvas; physics layer can replace or wrap this later.
 
-import { CaptureCanvas } from "@/components/capture-canvas";
+import { CanvasRenderer } from "@/components/canvas-renderer";
 
 interface BlendContainerProps {
   captureImage?: string;
@@ -21,7 +21,7 @@ export function BlendContainer({ captureImage, captureMetadata }: BlendContainer
 
   return (
     <div style={{ marginTop: "1rem" }}>
-      <CaptureCanvas
+      <CanvasRenderer
         imageBase64={captureImage}
         width={captureMetadata.width}
         height={captureMetadata.height}

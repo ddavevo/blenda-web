@@ -58,9 +58,15 @@ export function UrlInput({ onCapture }: UrlInputProps) {
         onChange={(e) => setUrl(e.target.value)}
       />
 
-      <button type="button" onClick={handleBlend} disabled={loading}>
+      <button type="button" onClick={handleBlend} disabled={loading} aria-busy={loading}>
         {loading ? "Blending…" : "Blend"}
       </button>
+
+      {loading && (
+        <p style={{ margin: 0, color: "#888" }} aria-live="polite">
+          Capturing…
+        </p>
+      )}
 
       {error && <p style={{ color: "red" }}>{error}</p>}
     </div>

@@ -3,23 +3,22 @@
 import { useRef, useEffect, useCallback } from "react";
 
 /**
- * Renders a base64 screenshot onto a canvas. Kept separate from the future
- * physics layer so this is purely the capture display; physics can be added
- * in PhysicsCanvas later.
+ * Draws a base64 screenshot onto a canvas. Canvas size uses metadata width/height.
+ * Clears the canvas before drawing a new image.
  */
-interface CaptureCanvasProps {
+interface CanvasRendererProps {
   imageBase64: string;
   width: number;
   height: number;
   className?: string;
 }
 
-export function CaptureCanvas({
+export function CanvasRenderer({
   imageBase64,
   width,
   height,
   className,
-}: CaptureCanvasProps) {
+}: CanvasRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const draw = useCallback(() => {
@@ -29,7 +28,6 @@ export function CaptureCanvas({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear previous image before drawing new one
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const img = new Image();
