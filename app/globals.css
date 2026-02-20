@@ -1,0 +1,17 @@
+/* TODO: Add global styles, CSS variables for colors/spacing, and base resets */
+:root {
+  --color-bg: #0a0a0a;
+  --color-text: #fafafa;
+  --color-accent: #6366f1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
