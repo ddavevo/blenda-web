@@ -5,20 +5,27 @@ import Matter from "matter-js";
 import {
   createPhysicsWorld,
   CONTAINER_PADDING,
+  rotateContainer,
+  clampTileVelocities,
   type PhysicsWorld,
 } from "@/lib/physics";
+import type { DragState } from "@/types/drag";
 
 const MAX_DELTA_MS = 50;
+/** Extra space so the rotated outline stays visible (sqrt(2) fits a 45° rotation). */
+const ROTATION_MARGIN = Math.SQRT2;
 
 /**
- * Splits the screenshot into a grid of tiles (40–80 pieces), creates a Matter.js
- * world with a container boundary, and renders each tile at its physics body position.
- * Tiles fall naturally inside the container.
+ * Splits the screenshot into a grid of tiles, creates a Matter.js world with a
+ * container boundary. Gravity stays downward so chunks always fall down. When the
+ * user drags the mixing knob, the container outline rotates and chunks tumble
+ * against the rotating walls.
  */
 interface CanvasRendererProps {
   imageBase64: string;
   width: number;
   height: number;
+  dragStateRef?: React.MutableRefObject<DragState>;
   className?: string;
 }
 
@@ -26,6 +33,7 @@ export function CanvasRenderer({
   imageBase64,
   width,
   height,
+  dragStateRef,
   className,
 }: CanvasRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -33,6 +41,8 @@ export function CanvasRenderer({
   const imageRef = useRef<HTMLImageElement | null>(null);
   const rafRef = useRef<number>(0);
   const prevTimeRef = useRef<number>(0);
+  const prevContainerAngleRef = useRef<number>(0);
+  const hasSyncedAngleRef = useRef<boolean>(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -45,10 +55,10 @@ export function CanvasRenderer({
       ? imageBase64
       : `data:image/png;base64,${imageBase64}`;
 
-    const containerWidth = width + CONTAINER_PADDING * 2;
-    const containerHeight = height + CONTAINER_PADDING * 2;
-    canvas.width = containerWidth;
-    canvas.height = containerHeight;
+    const containerSize = Math.max(width, height) + CONTAINER_PADDING * 2;
+    const canvasSize = Math.ceil(containerSize * ROTATION_MARGIN);
+    canvas.width = canvasSize;
+    canvas.height = canvasSize;
 
     const img = new Image();
     img.onload = () => {
@@ -63,6 +73,7 @@ export function CanvasRenderer({
 
     return () => {
       imageRef.current = null;
+      hasSyncedAngleRef.current = false;
       if (worldRef.current) {
         Matter.World.clear(worldRef.current.world, false);
         Matter.Engine.clear(worldRef.current.engine);
@@ -93,9 +104,26 @@ export function CanvasRenderer({
       const delta = Math.min(MAX_DELTA_MS, now - prevTimeRef.current);
       prevTimeRef.current = now;
 
-      Matter.Engine.update(world.engine, delta);
+      const containerAngle = dragStateRef?.current?.containerAngle ?? 0;
+      if (!hasSyncedAngleRef.current) {
+        prevContainerAngleRef.current = containerAngle;
+        hasSyncedAngleRef.current = true;
+      }
+      const prevAngle = prevContainerAngleRef.current;
+      const deltaAngle = containerAngle - prevAngle;
+      prevContainerAngleRef.current = containerAngle;
 
+      rotateContainer(world, deltaAngle);
+
+      Matter.Engine.update(world.engine, delta);
+      clampTileVelocities(world);
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const containerSize = world.containerWidth;
+      const offset = (canvas.width - containerSize) / 2;
+      ctx.translate(offset, offset);
 
       for (const { body, sx, sy, sw, sh } of world.tiles) {
         const { position, angle } = body;
@@ -105,6 +133,16 @@ export function CanvasRenderer({
         ctx.drawImage(img, sx, sy, sw, sh, -sw / 2, -sh / 2, sw, sh);
         ctx.restore();
       }
+
+      const cx = containerSize / 2;
+      const cy = containerSize / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(containerAngle);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(-cx, -cy, containerSize, containerSize);
+      ctx.restore();
     }
 
     rafRef.current = requestAnimationFrame(loop);
@@ -115,20 +153,20 @@ export function CanvasRenderer({
     };
   }, [imageBase64, width, height]);
 
-  const containerWidth = width + CONTAINER_PADDING * 2;
-  const containerHeight = height + CONTAINER_PADDING * 2;
+  const containerSize = Math.max(width, height) + CONTAINER_PADDING * 2;
+  const canvasSize = Math.ceil(containerSize * ROTATION_MARGIN);
 
   return (
     <canvas
       ref={canvasRef}
-      width={containerWidth}
-      height={containerHeight}
+      width={canvasSize}
+      height={canvasSize}
       className={className}
       style={{
         display: "block",
-        maxWidth: "100%",
+        maxWidth: "min(520px, 72vw)",
         height: "auto",
-        aspectRatio: `${containerWidth} / ${containerHeight}`,
+        aspectRatio: "1",
       }}
     />
   );

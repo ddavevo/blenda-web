@@ -1,14 +1,14 @@
 import Matter from "matter-js";
 
-const { Engine, World, Bodies } = Matter;
+const { Engine, World, Bodies, Composite } = Matter;
 
-const WALL_THICKNESS = 12;
-const TARGET_TILE_COUNT_MIN = 40;
-const TARGET_TILE_COUNT_MAX = 80;
+const WALL_THICKNESS = 1000;
+const TARGET_TILE_COUNT_MIN = 96;
+const TARGET_TILE_COUNT_MAX = 160;
 export const CONTAINER_PADDING = 40;
-const POSITION_OFFSET_MAX = 14;
-const VELOCITY_MAX = 35;
-const ANGULAR_VELOCITY_MAX = 0.12;
+const POSITION_OFFSET_MAX = 8;
+const VELOCITY_MAX = 28;
+const ANGULAR_VELOCITY_MAX = 0.1;
 
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -30,9 +30,32 @@ export interface PhysicsWorld {
   engine: Matter.Engine;
   world: Matter.World;
   walls: Matter.Body[];
+  containerComposite: Matter.Composite;
+  containerCenter: Matter.Vector;
   tiles: TileBody[];
   containerWidth: number;
   containerHeight: number;
+}
+
+/** Clamp tile body speeds so they don't clip through walls. */
+export const MAX_TILE_SPEED = 140;
+
+export function clampTileVelocities(world: PhysicsWorld): void {
+  for (const { body } of world.tiles) {
+    const v = body.velocity;
+    const speed = Math.hypot(v.x, v.y);
+    if (speed > MAX_TILE_SPEED) {
+      const scale = MAX_TILE_SPEED / speed;
+      Matter.Body.setVelocity(body, { x: v.x * scale, y: v.y * scale });
+    }
+    const maxAngular = 0.18;
+    if (Math.abs(body.angularVelocity) > maxAngular) {
+      Matter.Body.setAngularVelocity(
+        body,
+        body.angularVelocity > 0 ? maxAngular : -maxAngular
+      );
+    }
+  }
 }
 
 /**
@@ -62,31 +85,37 @@ function getGridDimensions(
   return { cols, rows };
 }
 
-function createWalls(
+/**
+ * Walls are positioned so their inner edges align with the container boundary.
+ * All thickness extends outward, so chunks can touch the container edges without clipping.
+ */
+function createContainerComposite(
   world: Matter.World,
   width: number,
   height: number
-): Matter.Body[] {
+): { composite: Matter.Composite; walls: Matter.Body[] } {
   const t = WALL_THICKNESS;
   const half = t / 2;
-  const left = Bodies.rectangle(half, height / 2, t, height + t * 2, {
+  const left = Bodies.rectangle(-half, height / 2, t, height + t * 2, {
     isStatic: true,
     label: "wall-left",
   });
-  const right = Bodies.rectangle(width - half, height / 2, t, height + t * 2, {
+  const right = Bodies.rectangle(width + half, height / 2, t, height + t * 2, {
     isStatic: true,
     label: "wall-right",
   });
-  const top = Bodies.rectangle(width / 2, half, width + t * 2, t, {
+  const top = Bodies.rectangle(width / 2, -half, width + t * 2, t, {
     isStatic: true,
     label: "wall-top",
   });
-  const bottom = Bodies.rectangle(width / 2, height - half, width + t * 2, t, {
+  const bottom = Bodies.rectangle(width / 2, height + half, width + t * 2, t, {
     isStatic: true,
     label: "wall-bottom",
   });
-  World.add(world, [left, right, top, bottom]);
-  return [left, right, top, bottom];
+  const composite = Composite.create({ label: "container" });
+  Composite.add(composite, [left, right, top, bottom]);
+  World.add(world, composite);
+  return { composite, walls: [left, right, top, bottom] };
 }
 
 function createTileBodies(
@@ -110,8 +139,8 @@ function createTileBodies(
       const x = baseX + randomSigned(POSITION_OFFSET_MAX);
       const y = baseY + randomSigned(POSITION_OFFSET_MAX);
       const body = Bodies.rectangle(x, y, tw, th, {
-        restitution: 0.35,
-        friction: 0.2,
+        restitution: 0.25,
+        friction: 0.3,
         density: 0.001,
         label: "tile",
       });
@@ -129,31 +158,53 @@ function createTileBodies(
 }
 
 /**
- * Create a Matter.js world: container larger than image, walls at container bounds,
- * tiles spawn in image region with random position offsets and small random velocities.
- * Tiles rotate naturally via collisions (default inertia).
+ * Create a Matter.js world: container is a SQUARE (symmetrical, no long/short edges)
+ * so rotation feels uniform and edge distance changes are gradual. Tiles spawn in
+ * the image region centered within the square.
  */
 export function createPhysicsWorld(
   imageWidth: number,
   imageHeight: number
 ): PhysicsWorld {
-  const containerWidth = imageWidth + CONTAINER_PADDING * 2;
-  const containerHeight = imageHeight + CONTAINER_PADDING * 2;
+  const containerSize =
+    Math.max(imageWidth, imageHeight) + CONTAINER_PADDING * 2;
+  const containerWidth = containerSize;
+  const containerHeight = containerSize;
+  const paddingX = (containerSize - imageWidth) / 2;
+  const paddingY = (containerSize - imageHeight) / 2;
   const engine = Engine.create({
     gravity: { x: 0, y: 1 },
   });
   const world = engine.world;
-  const walls = createWalls(world, containerWidth, containerHeight);
-  const tiles = createTileBodies(
+  const { composite, walls } = createContainerComposite(
     world,
-    imageWidth,
-    imageHeight,
-    CONTAINER_PADDING,
-    CONTAINER_PADDING
+    containerSize,
+    containerSize
   );
-  return { engine, world, walls, tiles, containerWidth, containerHeight };
+  const containerCenter = { x: containerSize / 2, y: containerSize / 2 };
+  const tiles = createTileBodies(world, imageWidth, imageHeight, paddingX, paddingY);
+  return {
+    engine,
+    world,
+    walls,
+    containerComposite: composite,
+    containerCenter,
+    tiles,
+    containerWidth,
+    containerHeight,
+  };
 }
 
-export function applyRotation(_world: PhysicsWorld, _deg: number): void {
-  // TODO: Rotation interaction — rotate container or gravity
+/** Rotate the container composite by delta angle around its center. */
+export function rotateContainer(
+  world: PhysicsWorld,
+  deltaAngleRad: number
+): void {
+  if (Math.abs(deltaAngleRad) < 1e-6) return;
+  Matter.Composite.rotate(
+    world.containerComposite,
+    deltaAngleRad,
+    world.containerCenter,
+    true
+  );
 }

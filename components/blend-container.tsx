@@ -1,9 +1,9 @@
 "use client";
 
-// Wrapper for capture display (and future PhysicsCanvas + RotationKnob).
-// Accepts capture result and renders screenshot on canvas; physics layer can replace or wrap this later.
-
+import { useRef } from "react";
 import { CanvasRenderer } from "@/components/canvas-renderer";
+import { RotationKnob } from "@/components/rotation-knob";
+import { INITIAL_DRAG_STATE } from "@/types/drag";
 
 interface BlendContainerProps {
   captureImage?: string;
@@ -11,6 +11,8 @@ interface BlendContainerProps {
 }
 
 export function BlendContainer({ captureImage, captureMetadata }: BlendContainerProps) {
+  const dragStateRef = useRef<typeof INITIAL_DRAG_STATE>({ ...INITIAL_DRAG_STATE });
+
   if (!captureImage || !captureMetadata) {
     return (
       <div style={{ padding: "1rem", color: "#888" }}>
@@ -20,13 +22,25 @@ export function BlendContainer({ captureImage, captureMetadata }: BlendContainer
   }
 
   return (
-    <div style={{ marginTop: "1rem" }}>
+    <div
+      style={{
+        marginTop: "1rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "1rem",
+        alignItems: "center",
+      }}
+    >
       <CanvasRenderer
         imageBase64={captureImage}
         width={captureMetadata.width}
         height={captureMetadata.height}
+        dragStateRef={dragStateRef}
       />
-      {/* TODO: Physics layer — replace or wrap with PhysicsCanvas + RotationKnob */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <span style={{ fontSize: "0.875rem", color: "#888" }}>Mix</span>
+        <RotationKnob dragStateRef={dragStateRef} />
+      </div>
     </div>
   );
 }
