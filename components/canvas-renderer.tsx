@@ -6,6 +6,7 @@ import {
   createPhysicsWorld,
   CONTAINER_PADDING,
   rotateContainer,
+  applyCircularMixingForce,
   clampTileVelocities,
   type PhysicsWorld,
 } from "@/lib/physics";
@@ -114,6 +115,7 @@ export function CanvasRenderer({
       prevContainerAngleRef.current = containerAngle;
 
       rotateContainer(world, deltaAngle);
+      applyCircularMixingForce(world, deltaAngle);
 
       Matter.Engine.update(world.engine, delta);
       clampTileVelocities(world);

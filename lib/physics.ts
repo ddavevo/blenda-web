@@ -38,7 +38,7 @@ export interface PhysicsWorld {
 }
 
 /** Clamp tile body speeds so they don't clip through walls. */
-export const MAX_TILE_SPEED = 140;
+export const MAX_TILE_SPEED = 110;
 
 export function clampTileVelocities(world: PhysicsWorld): void {
   for (const { body } of world.tiles) {
@@ -193,6 +193,33 @@ export function createPhysicsWorld(
     containerWidth,
     containerHeight,
   };
+}
+
+/**
+ * Apply tangential force so chunks orbit around the center when the user rotates.
+ * Creates a "race around the track" mixing feel. Strength scales with distance from center.
+ */
+export function applyCircularMixingForce(
+  world: PhysicsWorld,
+  deltaAngleRad: number
+): void {
+  if (Math.abs(deltaAngleRad) < 1e-6) return;
+  const cx = world.containerCenter.x;
+  const cy = world.containerCenter.y;
+  const baseStrength = 0.5;
+  for (const { body } of world.tiles) {
+    const dx = body.position.x - cx;
+    const dy = body.position.y - cy;
+    const dist = Math.hypot(dx, dy) || 1;
+    const tangentX = dy / dist;
+    const tangentY = -dx / dist;
+    const scale = Math.min(dist / 300, 1.2);
+    const mag = baseStrength * deltaAngleRad * scale;
+    Matter.Body.applyForce(body, body.position, {
+      x: tangentX * mag,
+      y: tangentY * mag,
+    });
+  }
 }
 
 /** Rotate the container composite by delta angle around its center. */
